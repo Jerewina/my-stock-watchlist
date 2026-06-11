@@ -266,7 +266,11 @@ function fetchSheet() {
 function fetchPrices(ticker) {
   var url = 'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol='+ticker+'&outputsize=compact&apikey='+AV_KEY;
   return fetchURL(url).then(function(text){
-    var json   = JSON.parse(text);
+    var json = JSON.parse(text);
+    // Detect rate limit or API info message
+    if (json['Note'] || json['Information']) {
+      return 'RATE_LIMIT';
+    }
     var series = json['Time Series (Daily)'];
     if (!series) return null;
     var dates  = Object.keys(series).sort();
@@ -297,8 +301,8 @@ function emaArr(arr, n) {
 }
 
 function computeSignal(prices, eps, pe) {
-  if (!prices || prices.length < 50) {
-    return {signal: null, reasons: [{label:'Data', val:'Insufficient history', cls:'neu'}], score: 0};
+  if (!prices || prices === 'RATE_LIMIT' || prices.length < 30) {
+    return {signal: null, reasons: [{label:'Data', val: prices ? 'Only '+prices.length+' days available' : 'No price data', cls:'neu'}], score: 0};
   }
   var n     = prices.length;
   var close = prices[n - 1];
@@ -404,10 +408,14 @@ function loadSignal(ticker, eps, pe, cardId, idx) {
   setTimeout(function(){
     fetchPrices(ticker).then(function(prices){
       var result;
-      try {
-        result = computeSignal(prices, eps, pe);
-      } catch(e) {
-        result = {signal:null, reasons:[{label:'Error', val:String(e), cls:'neu'}], score:0};
+      if (prices === 'RATE_LIMIT') {
+        result = {signal:null, reasons:[{label:'API', val:'Rate limit reached (25/day)', cls:'neu'}], score:0};
+      } else {
+        try {
+          result = computeSignal(prices, eps, pe);
+        } catch(e) {
+          result = {signal:null, reasons:[{label:'Error', val:'Calculation error', cls:'neu'}], score:0};
+        }
       }
       if (!result) result = {signal:null, reasons:[{label:'Data', val:'No result', cls:'neu'}], score:0};
       if (!result.reasons) result.reasons = [];
@@ -416,7 +424,7 @@ function loadSignal(ticker, eps, pe, cardId, idx) {
       sigCache[ticker] = result;
       applySignal(cardId, result);
     }).catch(function(e){
-      var result = {signal:null, reasons:[{label:'Error', val:'Fetch failed', cls:'neu'}], score:0, ts:Date.now()};
+      var result = {signal:null, reasons:[{label:'Network', val:'Fetch failed', cls:'neu'}], score:0, ts:Date.now()};
       sigCache[ticker] = result;
       applySignal(cardId, result);
     });
