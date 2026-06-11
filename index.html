@@ -305,10 +305,15 @@ function parseCSV(raw){
 async function fetchSheet(){
   try{
     const text=await fetchURL(SHEET_URL);
+    console.log('[Sheet] raw first 300 chars:', JSON.stringify(text.slice(0,300)));
     const parsed=parseCSV(text);
+    console.log('[Sheet] parsed rows:', parsed.length, parsed[0]||'none');
     if(parsed.length===0) throw new Error('empty');
     return parsed;
-  }catch(e){ return null; }
+  }catch(e){
+    console.error('[Sheet] fetch error:', e.message);
+    return null;
+  }
 }
 
 /* ══════════════════════════════════════════════
@@ -700,9 +705,9 @@ function renderPage(){
         </div>
       </div>
       <div class="signal-detail${cached?' visible':''}" id="det-${cardId}">
-        ${cached&&cached.reasons?
-          `<div class="signal-detail-title">Signal breakdown · score ${cached.score>0?'+':''}${cached.score}</div>`+
-          cached.reasons.map(r=>`<div class="signal-row"><span class="signal-row-label">${r.label}</span><span class="signal-row-val ${r.cls}">${r.val}</span></div>`).join('')
+        ${cached&&cached.reasons&&cached.reasons.length?
+          `<div class="signal-detail-title">Signal breakdown &middot; score ${cached.score>=0?'+':''}${cached.score||0}</div>`+
+          cached.reasons.map(function(r){return `<div class="signal-row"><span class="signal-row-label">${r.label||''}</span><span class="signal-row-val ${r.cls||''}">${r.val||''}</span></div>`;}).join('')
           :''}
       </div>
       <div class="news-links">
