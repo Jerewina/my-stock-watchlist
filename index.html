@@ -264,33 +264,35 @@ function parseCSV(raw){
   const out=[];
   for(const line of lines){
     if(!line.trim()) continue;
+    // Split respecting quoted fields
     const cols=[]; let cur='',inQ=false;
     for(let c=0;c<line.length;c++){
       const ch=line[c];
       if(ch==='"'){inQ=!inQ;}
-      else if(ch===delim&&!inQ){cols.push(cur);cur='';}
+      else if(ch===delim&&!inQ){cols.push(cur.trim().replace(/^"|"$/g,''));cur='';}
       else{cur+=ch;}
     }
-    cols.push(cur);
-    const ticker=(cols[0]||'').trim().replace(/^"|"$/g,'').toUpperCase();
-    if(!ticker||ticker==='TICKER'||ticker==='SYMBOL') continue;
-    const price    =parseFloat((cols[1]||'').replace(/^"|"$/g,'').replace(/,/g,''));
-    const changePct=parseFloat((cols[2]||'').replace(/^"|"$/g,'').replace(/,/g,''));
+    cols.push(cur.trim().replace(/^"|"$/g,''));
+    // Skip header
+    const ticker=(cols[0]||'').toUpperCase().trim();
+    if(!ticker||ticker==='TICKER'||ticker==='SYMBOL'||ticker==='') continue;
+    // Positional: col0=Ticker col1=Price col2=Change% col3=Name col4=EPS col5=PE
+    const price     = parseFloat((cols[1]||'').replace(/,/g,''));
+    const changePct = parseFloat((cols[2]||'').replace(/,/g,''));
+    const name      = (cols[3]||ticker).trim()||ticker;
+    const epsRaw    = (cols[4]||'').trim();
+    const peRaw     = (cols[5]||'').trim();
     if(!ticker||isNaN(price)||price<=0) continue;
-    const n=cols.length;
-    const peRaw =(cols[n-1]||'').trim().replace(/^"|"$/g,'');
-    const epsRaw=(cols[n-2]||'').trim().replace(/^"|"$/g,'');
-    const name  =n>5?cols.slice(3,n-2).join(',').trim().replace(/^"|"$/g,''):
-                     (cols[3]||'').trim().replace(/^"|"$/g,'')||ticker;
-    const eps=parseFloat(epsRaw.replace(/,/g,''));
-    const peClean=peRaw.replace(/#/g,'').toUpperCase();
-    const pe=(peClean===''||peClean==='N/A'||peClean==='NA')?null:parseFloat(peRaw.replace(/,/g,''));
+    const eps = parseFloat(epsRaw.replace(/,/g,''));
+    const peClean = peRaw.replace(/#/g,'').toUpperCase();
+    const pe = (peClean===''||peClean==='N/A'||peClean==='NA')
+               ? null : parseFloat(peRaw.replace(/,/g,''));
     out.push({
       ticker, price,
-      changePct:isNaN(changePct)?0:changePct,
-      name:name||ticker,
-      eps:isNaN(eps)?null:eps,
-      pe:(pe===null||isNaN(pe))?null:pe
+      changePct: isNaN(changePct)?0:changePct,
+      name,
+      eps:  isNaN(eps)?null:eps,
+      pe:   (pe===null||isNaN(pe))?null:pe
     });
   }
   return out;
