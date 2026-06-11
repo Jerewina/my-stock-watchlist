@@ -258,17 +258,15 @@ async function fetchURL(url){
    SHEET FETCH & PARSE
 ══════════════════════════════════════════════ */
 function parseCSV(raw){
-  // Strip ALL carriage returns first, then split on newlines
-  var cleaned = raw.replace(/\r/g, '');
+  // Strip BOM, all carriage returns, then split
+  var cleaned = raw.replace(/^\uFEFF/,'').replace(/\r/g,'');
   var lines = cleaned.trim().split('\n');
   var out = [];
-  // Skip header (line 0)
-  for(var li = 1; li < lines.length; li++){
+  for(var li = 0; li < lines.length; li++){
     var line = lines[li].trim();
     if(!line) continue;
-    // Split on comma, respecting double-quoted fields
-    var cols = [];
-    var col = '', inQ = false;
+    // Split on comma respecting quoted fields
+    var cols = [], col = '', inQ = false;
     for(var ci = 0; ci < line.length; ci++){
       var ch = line[ci];
       if(ch === '"'){ inQ = !inQ; }
@@ -276,21 +274,22 @@ function parseCSV(raw){
       else { col += ch; }
     }
     cols.push(col);
-    // Clean quotes from each cell
+    // Clean each cell
     cols = cols.map(function(s){ return s.replace(/^"|"$/g,'').trim(); });
-    // Must have at least 6 columns
     if(cols.length < 6) continue;
-    var ticker    = cols[0].toUpperCase();
-    var price     = parseFloat(cols[1].replace(/,/g,''));
+    var ticker = cols[0].toUpperCase().replace(/[^A-Z0-9.]/g,'');
+    // Skip header or non-ticker rows
+    if(!ticker || ticker === 'TICKER' || ticker === 'SYMBOL' || ticker === 'NAME') continue;
+    // Skip rows where price col is not a number (e.g. second header line)
+    var price = parseFloat(cols[1].replace(/,/g,''));
+    if(isNaN(price) || price <= 0) continue;
     var changePct = parseFloat(cols[2].replace(/,/g,''));
     var name      = cols[3] || ticker;
-    var epsRaw    = cols[4];
-    var peRaw     = cols[5];
-    if(!ticker || isNaN(price) || price <= 0) continue;
-    var eps     = parseFloat(epsRaw.replace(/,/g,''));
-    var peClean = peRaw.replace(/#/g,'').toUpperCase().trim();
-    var pe      = (peClean===''||peClean==='N/A'||peClean==='NA')
-                  ? null : parseFloat(peRaw.replace(/,/g,''));
+    var epsRaw    = cols[4] || '';
+    var peRaw     = cols[5] || '';
+    var eps       = parseFloat(epsRaw.replace(/,/g,''));
+    var peClean   = peRaw.replace(/#/g,'').toUpperCase().trim();
+    var pe        = (peClean===''||peClean==='N/A'||peClean==='NA') ? null : parseFloat(peRaw.replace(/,/g,''));
     out.push({
       ticker    : ticker,
       price     : price,
