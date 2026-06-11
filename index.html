@@ -205,10 +205,12 @@ function parseCSV(raw) {
     var line = lines[i].trim();
     if (!line) continue;
     var cols = line.split(',');
-    /* Need at least 6 columns */
+    /* Strip trailing empty columns (Google Sheets adds trailing commas) */
+    while (cols.length > 0 && cols[cols.length-1].trim() === '') cols.pop();
+    /* Need exactly 6 meaningful columns */
     if (cols.length < 6) continue;
     var ticker = cols[0].trim().toUpperCase();
-    /* Skip header row — ticker column will be "TICKER" or not purely alpha */
+    /* Skip header row */
     if (!ticker || ticker === 'TICKER' || ticker === 'SYMBOL') continue;
     /* col1=Price, col2=Change%, col3=Name, col[-2]=EPS, col[-1]=PE */
     /* Name may contain commas so join middle columns */
@@ -569,7 +571,7 @@ function renderPage() {
       '</div>' +
       '<div class="sigdetail' + (cached&&cached.reasons&&cached.reasons.length?' show':'') + '" id="det-'+cid+'">' +
         (cached&&cached.reasons&&cached.reasons.length ?
-          '<div class="sigdetail-title">Signal breakdown · score ' + (cached.score>=0?'+':'') + cached.score + '</div>' +
+          '<div class="sigdetail-title">Signal breakdown · score ' + ((cached.score||0)>=0?'+':'') + (cached.score||0) + '</div>' +
           cached.reasons.map(function(r){
             return '<div class="sigrow"><span class="sigrow-lbl">'+r.label+'</span><span class="sigrow-val '+r.cls+'">'+r.val+'</span></div>';
           }).join('') : '') +
