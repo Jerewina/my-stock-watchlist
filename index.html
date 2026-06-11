@@ -258,41 +258,60 @@ async function fetchURL(url){
    SHEET FETCH & PARSE
 ══════════════════════════════════════════════ */
 function parseCSV(raw){
-  const lines=raw.trim().replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  // Clean line endings
+  const lines = raw.trim().replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
   if(!lines.length) return [];
-  const delim=lines[0].includes('\t')?'\t':',';
-  const out=[];
-  for(const line of lines){
+  const out = [];
+
+  for(let li=0; li<lines.length; li++){
+    const line = lines[li];
     if(!line.trim()) continue;
-    // Split respecting quoted fields
-    const cols=[]; let cur='',inQ=false;
-    for(let c=0;c<line.length;c++){
-      const ch=line[c];
-      if(ch==='"'){inQ=!inQ;}
-      else if(ch===delim&&!inQ){cols.push(cur.trim().replace(/^"|"$/g,''));cur='';}
-      else{cur+=ch;}
+
+    // Robust CSV split: handles quoted fields, does NOT trim inside loop
+    const cols = [];
+    let col = '', inQuote = false;
+    for(let i=0; i<line.length; i++){
+      const ch = line[i];
+      if(ch === '"'){
+        inQuote = !inQuote;
+      } else if(ch === ',' && !inQuote){
+        cols.push(col);
+        col = '';
+      } else {
+        col += ch;
+      }
     }
-    cols.push(cur.trim().replace(/^"|"$/g,''));
-    // Skip header
-    const ticker=(cols[0]||'').toUpperCase().trim();
-    if(!ticker||ticker==='TICKER'||ticker==='SYMBOL'||ticker==='') continue;
-    // Positional: col0=Ticker col1=Price col2=Change% col3=Name col4=EPS col5=PE
-    const price     = parseFloat((cols[1]||'').replace(/,/g,''));
-    const changePct = parseFloat((cols[2]||'').replace(/,/g,''));
-    const name      = (cols[3]||ticker).trim()||ticker;
-    const epsRaw    = (cols[4]||'').trim();
-    const peRaw     = (cols[5]||'').trim();
-    if(!ticker||isNaN(price)||price<=0) continue;
-    const eps = parseFloat(epsRaw.replace(/,/g,''));
-    const peClean = peRaw.replace(/#/g,'').toUpperCase();
-    const pe = (peClean===''||peClean==='N/A'||peClean==='NA')
-               ? null : parseFloat(peRaw.replace(/,/g,''));
+    cols.push(col); // last column
+
+    // Clean each col — remove surrounding quotes and whitespace
+    const c = cols.map(s => s.replace(/^\s*"|"\s*$/g,'').trim());
+
+    // Skip header row
+    if(li === 0) continue;
+    // Skip empty rows
+    if(!c[0]) continue;
+
+    const ticker    = c[0].toUpperCase();
+    const price     = parseFloat(c[1].replace(/,/g,''));
+    const changePct = parseFloat(c[2].replace(/,/g,''));
+    const name      = c[3] || ticker;
+    const epsRaw    = c[4] || '';
+    const peRaw     = c[5] || '';
+
+    if(!ticker || isNaN(price) || price <= 0) continue;
+
+    const eps     = parseFloat(epsRaw.replace(/,/g,''));
+    const peClean = peRaw.replace(/#/g,'').toUpperCase().trim();
+    const pe      = (peClean===''||peClean==='N/A'||peClean==='NA')
+                    ? null : parseFloat(peRaw.replace(/,/g,''));
+
     out.push({
-      ticker, price,
-      changePct: isNaN(changePct)?0:changePct,
+      ticker,
+      price,
+      changePct : isNaN(changePct) ? 0 : changePct,
       name,
-      eps:  isNaN(eps)?null:eps,
-      pe:   (pe===null||isNaN(pe))?null:pe
+      eps : isNaN(eps) ? null : eps,
+      pe  : (pe === null || isNaN(pe)) ? null : pe
     });
   }
   return out;
