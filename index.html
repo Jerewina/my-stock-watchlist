@@ -403,8 +403,20 @@ function loadSignal(ticker, eps, pe, cardId, idx) {
   }
   setTimeout(function(){
     fetchPrices(ticker).then(function(prices){
-      var result = computeSignal(prices, eps, pe);
-      result.ts  = Date.now();
+      var result;
+      try {
+        result = computeSignal(prices, eps, pe);
+      } catch(e) {
+        result = {signal:null, reasons:[{label:'Error', val:String(e), cls:'neu'}], score:0};
+      }
+      if (!result) result = {signal:null, reasons:[{label:'Data', val:'No result', cls:'neu'}], score:0};
+      if (!result.reasons) result.reasons = [];
+      if (typeof result.score !== 'number') result.score = 0;
+      result.ts = Date.now();
+      sigCache[ticker] = result;
+      applySignal(cardId, result);
+    }).catch(function(e){
+      var result = {signal:null, reasons:[{label:'Error', val:'Fetch failed', cls:'neu'}], score:0, ts:Date.now()};
       sigCache[ticker] = result;
       applySignal(cardId, result);
     });
@@ -419,7 +431,7 @@ function applySignal(cardId, result) {
 
   var sig     = result.signal  || null;
   var reasons = result.reasons || [];
-  var score   = result.score   || 0;
+  var score   = (result.score !== undefined && result.score !== null) ? result.score : 0;
 
   if (sig === 'BUY') {
     badge.className = 'sigbadge buy'; badge.textContent = '🟢 BUY';
@@ -440,7 +452,11 @@ function applySignal(cardId, result) {
     var html = '<div class="sigdetail-title">Signal breakdown · score ' + scoreStr + '</div>';
     for (var i = 0; i < reasons.length; i++) {
       var r = reasons[i];
-      html += '<div class="sigrow"><span class="sigrow-lbl">' + r.label + '</span><span class="sigrow-val ' + r.cls + '">' + r.val + '</span></div>';
+      if (!r) continue;
+      var rlbl = r.label || '';
+      var rval = r.val   || '';
+      var rcls = r.cls   || 'neu';
+      html += '<div class="sigrow"><span class="sigrow-lbl">' + rlbl + '</span><span class="sigrow-val ' + rcls + '">' + rval + '</span></div>';
     }
     detail.innerHTML = html;
     detail.classList.add('show');
